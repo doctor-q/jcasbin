@@ -22,10 +22,10 @@ import org.casbin.jcasbin.effect.DefaultEffector;
 import org.casbin.jcasbin.effect.Effect;
 import org.casbin.jcasbin.effect.Effector;
 import org.casbin.jcasbin.model.Assertion;
-import org.casbin.jcasbin.persist.Watcher;
 import org.casbin.jcasbin.model.FunctionMap;
 import org.casbin.jcasbin.model.Model;
 import org.casbin.jcasbin.persist.Adapter;
+import org.casbin.jcasbin.persist.Watcher;
 import org.casbin.jcasbin.rbac.DefaultRoleManager;
 import org.casbin.jcasbin.rbac.RoleManager;
 import org.casbin.jcasbin.util.BuiltInFunctions;
@@ -68,9 +68,7 @@ public class CoreEnforcer {
      * @return an empty model.
      */
     public static Model newModel() {
-        Model m = new Model();
-
-        return m;
+        return new Model();
     }
 
     /**
@@ -91,8 +89,8 @@ public class CoreEnforcer {
      * newModel creates a model.
      *
      * @param modelPath the path of the model file.
-     * @param unused unused parameter, just for differentiating with
-     *               newModel(String text).
+     * @param unused    unused parameter, just for differentiating with
+     *                  newModel(String text).
      * @return the model.
      */
     public static Model newModel(String modelPath, String unused) {
@@ -209,6 +207,7 @@ public class CoreEnforcer {
      * @param filter the filter used to specify which type of policy should be loaded.
      */
     public void loadFilteredPolicy(Object filter) {
+        // ignore
     }
 
     /**
@@ -308,8 +307,8 @@ public class CoreEnforcer {
                 String key = entry.getKey();
                 Assertion ast = entry.getValue();
 
-                RoleManager rm = ast.rm;
-                functions.put(key, BuiltInFunctions.generateGFunction(key, rm));
+                RoleManager roleManager = ast.rm;
+                functions.put(key, BuiltInFunctions.generateGFunction(key, roleManager));
             }
         }
         AviatorEvaluatorInstance eval = AviatorEvaluator.newInstance();
@@ -320,30 +319,27 @@ public class CoreEnforcer {
         String expString = model.model.get("m").get("m").value;
         Expression expression = eval.compile(expString);
 
-        Effect policyEffects[];
-        float matcherResults[];
+        Effect[] policyEffects;
+        float[] matcherResults;
         int policyLen;
         if ((policyLen = model.model.get("p").get("p").policy.size()) != 0) {
             policyEffects = new Effect[policyLen];
             matcherResults = new float[policyLen];
 
-            for (int i = 0; i < model.model.get("p").get("p").policy.size(); i ++) {
+            for (int i = 0; i < model.model.get("p").get("p").policy.size(); i++) {
                 List<String> pvals = model.model.get("p").get("p").policy.get(i);
 
-                // Util.logPrint("Policy Rule: " + pvals);
-
                 Map<String, Object> parameters = new HashMap<>();
-                for (int j = 0; j < model.model.get("r").get("r").tokens.length; j ++) {
+                for (int j = 0; j < model.model.get("r").get("r").tokens.length; j++) {
                     String token = model.model.get("r").get("r").tokens[j];
                     parameters.put(token, rvals[j]);
                 }
-                for (int j = 0; j < model.model.get("p").get("p").tokens.length; j ++) {
+                for (int j = 0; j < model.model.get("p").get("p").tokens.length; j++) {
                     String token = model.model.get("p").get("p").tokens[j];
                     parameters.put(token, pvals.get(j));
                 }
 
-                Object result =  expression.execute(parameters);
-                // Util.logPrint("Result: " + result);
+                Object result = expression.execute(parameters);
 
                 if (result instanceof Boolean) {
                     if (!((boolean) result)) {
@@ -361,13 +357,17 @@ public class CoreEnforcer {
                     throw new Error("matcher result should be bool, int or float");
                 }
                 if (parameters.containsKey("p_eft")) {
-                    String eft = (String) parameters.get("p_eft");
-                    if (eft.equals("allow")) {
-                        policyEffects[i] = Effect.Allow;
-                    } else if (eft.equals("deny")) {
-                        policyEffects[i] = Effect.Deny;
-                    } else {
-                        policyEffects[i] = Effect.Indeterminate;
+                    String pEft = (String) parameters.get("p_eft");
+                    switch (pEft) {
+                        case "allow":
+                            policyEffects[i] = Effect.Allow;
+                            break;
+                        case "deny":
+                            policyEffects[i] = Effect.Deny;
+                            break;
+                        default:
+                            policyEffects[i] = Effect.Indeterminate;
+                            break;
                     }
                 } else {
                     policyEffects[i] = Effect.Allow;
@@ -382,17 +382,16 @@ public class CoreEnforcer {
             matcherResults = new float[1];
 
             Map<String, Object> parameters = new HashMap<>();
-            for (int j = 0; j < model.model.get("r").get("r").tokens.length; j ++) {
+            for (int j = 0; j < model.model.get("r").get("r").tokens.length; j++) {
                 String token = model.model.get("r").get("r").tokens[j];
                 parameters.put(token, rvals[j]);
             }
-            for (int j = 0; j < model.model.get("p").get("p").tokens.length; j ++) {
+            for (int j = 0; j < model.model.get("p").get("p").tokens.length; j++) {
                 String token = model.model.get("p").get("p").tokens[j];
                 parameters.put(token, "");
             }
 
             Object result = expression.execute(parameters);
-            // Util.logPrint("Result: " + result);
 
             if ((boolean) result) {
                 policyEffects[0] = Effect.Allow;
@@ -404,7 +403,7 @@ public class CoreEnforcer {
         boolean result = eft.mergeEffects(model.model.get("e").get("e").value, policyEffects, matcherResults);
 
         StringBuilder reqStr = new StringBuilder("Request: ");
-        for (int i = 0; i < rvals.length; i ++) {
+        for (int i = 0; i < rvals.length; i++) {
             String rval = rvals[i].toString();
 
             if (i != rvals.length - 1) {
